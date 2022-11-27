@@ -226,7 +226,10 @@ class ViewFollowTests(TestCase):
                 'posts:profile', kwargs={'username': self.user3}
             )
         )
-        self.assertEqual(Follow.objects.count(), follow_count + NUMBER_OF_POSTS)
+        self.assertEqual(
+            Follow.objects.count(),
+            follow_count + NUMBER_OF_POSTS
+        )
         self.assertTrue(
             Follow.objects.filter(
                 user=self.user,

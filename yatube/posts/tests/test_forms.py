@@ -76,7 +76,7 @@ class PostFormTest(TestCase):
 
     def test_for_redact_post(self):
         """Тест на редактирование поста"""
-        redact_post = self.authorized_client.post(
+        self.authorized_client.post(
             reverse(
                 'posts:post_edit',
                 kwargs={'post_id': self.post.id}
@@ -168,10 +168,13 @@ class PostCreateFormTests(TestCase):
             data=form_data,
             follow=True,
         )
-        self.assertRedirects(response, reverse(
-            'posts:profile',
-            kwargs={'username': self.user})
-                             )
+        self.assertRedirects(
+            response,
+            reverse(
+                'posts:profile',
+                kwargs={'username': self.user}
+            )
+        )
         self.assertEqual(
             Post.objects.count(),
             self.posts_count + ONE_POST)
