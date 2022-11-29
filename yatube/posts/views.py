@@ -39,7 +39,7 @@ def profile(request, username):
         request.user.is_authenticated
         and request.user.follower.filter(
             author=author
-            ).exists()
+        ).exists()
     )
     context = {
         'following': following,
