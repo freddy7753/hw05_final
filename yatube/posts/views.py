@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import cache_page
 
 from .forms import PostForm, CommentForm
-from .models import *
+from .models import Post, Group, Comment, Follow, User
 from .utils import get_paginator_obj
 
 TITLE_COUNT_SYMBOL: int = 30

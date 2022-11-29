@@ -327,5 +327,3 @@ class ViewFollowTests(TestCase):
         )
         self.assertEqual(response.status_code, HTTPStatus.FOUND)
         self.assertEqual(Follow.objects.count(), ZERO)
-
-
