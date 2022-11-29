@@ -84,7 +84,7 @@ class PostURLTests(TestCase):
             **self.templates_url_names_privet
         }
         for address, template in urls_template.items():
-            """Для авторизованного пользователя"""
+            # Для авторизованного пользователя
             with self.subTest(address=address):
                 response = self.authorized_client.get(address)
                 self.assertTemplateUsed(response, template)

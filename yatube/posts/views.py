@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import cache_page
 
 from .forms import PostForm, CommentForm
-from .models import Post, Group, User, Comment, Follow
+from .models import *
 from .utils import get_paginator_obj
 
 TITLE_COUNT_SYMBOL: int = 30
@@ -14,10 +14,7 @@ TITLE_COUNT_SYMBOL: int = 30
 def index(request):
     post_list = Post.objects.select_related('author', 'group')
     page_obj = get_paginator_obj(post_list, request)
-    context = {
-        'page_obj': page_obj,
-    }
-    return render(request, 'posts/index.html', context)
+    return render(request, 'posts/index.html', {'page_obj': page_obj})
 
 
 def group_posts(request, slug):
@@ -27,7 +24,6 @@ def group_posts(request, slug):
     context = {
         'group': group,
         'page_obj': page_obj,
-        'title': f'Записи сообщества: {group}',
     }
     return render(request, 'posts/group_list.html', context)
 
@@ -38,16 +34,16 @@ def profile(request, username):
         'author',
         'group'
     )
-    posts_count = Post.objects.filter(author=author).count()
     page_obj = get_paginator_obj(user_posts, request)
-    following = request.user.is_authenticated \
+    following = (
+        request.user.is_authenticated
         and request.user.follower.filter(
             author=author
-        ).exists()
+            ).exists()
+    )
     context = {
         'following': following,
         'page_obj': page_obj,
-        'posts_count': posts_count,
         'author': author,
     }
     return render(request, 'posts/profile.html', context)
@@ -56,14 +52,12 @@ def profile(request, username):
 def post_detail(request, pk):
     post = get_object_or_404(Post, pk=pk)
     author_post = Post.objects.select_related('author')
-    post_count = author_post.count()
     title = post.text[:TITLE_COUNT_SYMBOL]
     comments = Comment.objects.filter(post=post)
     form = CommentForm(request.POST or None)
     context = {
         'title': title,
         'post': post,
-        'post_count': post_count,
         'author_post': author_post,
         'form': form,
         'comments': comments
@@ -145,5 +139,7 @@ def profile_follow(request, username):
 @login_required
 def profile_unfollow(request, username):
     author = User.objects.get(username=username)
-    Follow.objects.filter(user=request.user, author=author).delete()
+    is_follower = Follow.objects.filter(user=request.user, author=author)
+    if is_follower:
+        is_follower.delete()
     return redirect('posts:profile', username)

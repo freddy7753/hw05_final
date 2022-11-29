@@ -1,9 +1,11 @@
+from http import HTTPStatus
+
 from django import forms
 from django.core.cache import cache
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from ..models import Post, Group, User, Follow
+from ..models import Post, Group, User, Follow, Comment
 
 NUMBER_OF_POSTS: int = 1
 NEW_POSTS: int = 13
@@ -11,6 +13,7 @@ POSTS_ON_FIRST_PAGE: int = 10
 POSTS_ON_SECOND_PAGE: int = 3
 FIRST_PAGE: int = 1
 SECOND_PAGE: int = 2
+ZERO: int = 0
 
 
 class PostPagesTests(TestCase):
@@ -55,23 +58,28 @@ class PostPagesTests(TestCase):
         }
 
     def setUp(self):
+        self.guest_client = Client()
         self.authorized_client = Client()
         self.authorized_client.force_login(self.user)
         cache.clear()
 
     def test_index_cache(self):
         """Проверка кеша главной страницы"""
-        response = self.authorized_client.get(reverse('posts:index'))
-        content1 = response.content
+        response = self.authorized_client.get(self.index)
+        content_before_del_post = response.content
         Post.objects.all().delete()
-        response2 = self.authorized_client.get(reverse('posts:index'))
-        content2 = response2.content
-        self.assertEqual(content1, content2)
-        """Очищаем кеш и проверяем на изменение ответа"""
+        response_after_del_post = self.authorized_client.get(
+            self.index
+        )
+        content_after_del_post = response_after_del_post.content
+        self.assertEqual(content_before_del_post, content_after_del_post)
+        # Очищаем кеш и проверяем на изменение ответа
         cache.clear()
-        response3 = self.authorized_client.get(reverse('posts:index'))
-        content3 = response3.content
-        self.assertNotEqual(content2, content3)
+        response_after_clear_cache = self.authorized_client.get(
+            self.index
+        )
+        content_after_clear_cache = response_after_clear_cache.content
+        self.assertNotEqual(content_after_del_post, content_after_clear_cache)
 
     def test_pages_uses_correct_template(self):
         """URL адрес использует свой шаблон"""
@@ -145,6 +153,33 @@ class PostPagesTests(TestCase):
                     self.post.text
                 )
 
+    def test_comment_post_is_forbidden_for_guest_client(self):
+        """Не авторизованный пользователь
+         не может комментировать пост"""
+        comment = Comment.objects.count()
+        self.guest_client.post(
+            reverse(
+                'posts:add_comment',
+                kwargs={'post_id': self.post.id}
+            ),
+            data={'text': 'Test comment'},
+            follow=True
+        )
+        self.assertEqual(Comment.objects.count(), comment)
+
+    def test_comment_post_for_authorized_client(self):
+        """Комментарий после успешной отправки
+         появляется на странице поста"""
+        self.authorized_client.post(
+            reverse(
+                'posts:add_comment',
+                kwargs={'post_id': self.post.id}
+            ),
+            data={'text': 'Test comment'},
+            follow=True
+        )
+        self.assertEqual(Comment.objects.count(), NUMBER_OF_POSTS)
+
 
 class PaginatorViewsTest(TestCase):
 
@@ -199,53 +234,57 @@ class ViewFollowTests(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.user = User.objects.create_user(username='user')
-        cls.user2 = User.objects.create_user(username='user2')
-        cls.user3 = User.objects.create_user(username='user3')
+        cls.follower_user = User.objects.create_user(username='user')
+        cls.user = User.objects.create_user(username='user2')
+        cls.following_user = User.objects.create_user(username='user3')
+        cls.follow_count = Follow.objects.count()
 
     def setUp(self):
-        self.authorized_client1 = Client()
-        self.authorized_client1.force_login(self.user)
-        self.authorized_client2 = Client()
-        self.authorized_client2.force_login(self.user2)
+        self.guest_client = Client()
+        self.follower_client = Client()
+        self.follower_client.force_login(self.follower_user)
+        self.authorized_client = Client()
+        self.authorized_client.force_login(self.user)
         self.following_client = Client()
-        self.following_client.force_login(self.user3)
+        self.following_client.force_login(self.following_user)
         cache.clear()
 
-    def test_authorized_client_can_subscribe_un(self):
-        """Авторизованный пользователь может подписаться и отписаться"""
-        follow_count = Follow.objects.count()
-        response = self.authorized_client1.get(
+    def test_authorized_client_can_subscribe(self):
+        """Авторизованный пользователь может подписаться"""
+        response = self.follower_client.get(
             reverse(
                 'posts:profile_follow',
-                kwargs={'username': self.user3}
+                kwargs={'username': self.following_user}
             )
         )
         self.assertRedirects(
             response, reverse(
-                'posts:profile', kwargs={'username': self.user3}
+                'posts:profile', kwargs={'username': self.following_user}
             )
         )
         self.assertEqual(
             Follow.objects.count(),
-            follow_count + NUMBER_OF_POSTS
+            self.follow_count + NUMBER_OF_POSTS
         )
         self.assertTrue(
             Follow.objects.filter(
-                user=self.user,
-                author=self.user3
+                user=self.follower_user,
+                author=self.following_user
             ).exists()
         )
-        response2 = self.authorized_client1.get(
+
+    def test_authorized_client_can_unsubscribe(self):
+        """Авторизованный пользователь может отписаться"""
+        response = self.follower_client.get(
             reverse(
                 'posts:profile_unfollow',
-                kwargs={'username': self.user3}
+                kwargs={'username': self.following_user}
             )
         )
-        self.assertEqual(Follow.objects.count(), follow_count)
+        self.assertEqual(Follow.objects.count(), self.follow_count)
         self.assertRedirects(
-            response2, reverse(
-                'posts:profile', kwargs={'username': self.user3}
+            response, reverse(
+                'posts:profile', kwargs={'username': self.following_user}
             )
         )
 
@@ -254,23 +293,39 @@ class ViewFollowTests(TestCase):
         не появляется в ленте других"""
         post = Post.objects.create(
             text='Test post',
-            author=self.user3
+            author=self.following_user
         )
         Follow.objects.create(
-            user=self.user,
-            author=self.user3
+            user=self.follower_user,
+            author=self.following_user
         )
-        response = self.authorized_client1.get(
+        response_follower = self.follower_client.get(
             reverse(
                 'posts:follow_index'
             )
         )
-        response2 = self.authorized_client2.get(
+        response_authorized_client = self.authorized_client.get(
             reverse(
                 'posts:follow_index'
             )
         )
-        self.assertEqual(response.context['post'].text, post.text)
-        self.assertEqual(response.context['post'].author, post.author)
-        self.assertEqual(response.context['post'].group, None)
-        self.assertNotIn(post, response2.context['page_obj'])
+        self.assertEqual(response_follower.context['post'].text, post.text)
+        self.assertEqual(
+            response_follower.context['post'].author,
+            post.author
+        )
+        self.assertEqual(response_follower.context['post'].group, None)
+        self.assertNotIn(post, response_authorized_client.context['page_obj'])
+
+    def test_guest_client_cant_subscribe(self):
+        """Неавторизованный клиент не может подписаться"""
+        response = self.guest_client.get(
+            reverse(
+                'posts:profile_follow',
+                kwargs={'username': self.following_client}
+            )
+        )
+        self.assertEqual(response.status_code, HTTPStatus.FOUND)
+        self.assertEqual(Follow.objects.count(), ZERO)
+
+

@@ -1,6 +1,6 @@
 from django.test import TestCase
 
-from ..models import Group, Post, User
+from ..models import Group, Post, User, Comment, Follow
 
 
 class PostModelTest(TestCase):
@@ -8,6 +8,7 @@ class PostModelTest(TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.user = User.objects.create_user(username='auth')
+        cls.user2 = User.objects.create_user(username='user')
         cls.group = Group.objects.create(
             title='Тестовая группа',
             slug='Тестовый слаг',
@@ -17,12 +18,23 @@ class PostModelTest(TestCase):
             author=cls.user,
             text='Тестовый пост',
         )
+        cls.comment = Comment.objects.create(
+            text='Test comment',
+            author=cls.user,
+            post=cls.post
+        )
+        cls.follow = Follow.objects.create(
+            user=cls.user,
+            author=cls.user2
+        )
 
     def test_models_have_correct_object_names(self):
         """Проверяем, что у моделей корректно работает __str__."""
         correct_str_method = {
             self.post: self.post.text[:15],
-            self.group: self.group.title
+            self.group: self.group.title,
+            self.comment: self.comment.text[:15],
+            self.follow: self.follow.user.username
         }
         for expected, actual in correct_str_method.items():
             with self.subTest(expected=expected):

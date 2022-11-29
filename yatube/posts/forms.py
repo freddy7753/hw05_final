@@ -9,12 +9,6 @@ class PostForm(forms.ModelForm):
         labels = {'text': 'Текст поста', 'group': 'Выберите группу'}
         help_texts = {'text': 'Текст поста', 'group': 'Выберите группу'}
 
-    def clean_text(self):
-        data = self.cleaned_data['text']
-        if data == '':
-            raise forms.ValidationError('Заполните поле')
-        return data
-
 
 class CommentForm(forms.ModelForm):
     class Meta:

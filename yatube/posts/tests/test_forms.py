@@ -7,12 +7,26 @@ from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 
 from ..forms import PostForm
-from ..models import Group, Post, User, Comment
+from ..models import Group, Post, User
 
 ONE_POST: int = 1
 TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
+SMALL_GIF = (
+    b'\x47\x49\x46\x38\x39\x61\x02\x00'
+    b'\x01\x00\x80\x00\x00\x00\x00\x00'
+    b'\xFF\xFF\xFF\x21\xF9\x04\x00\x00'
+    b'\x00\x00\x00\x2C\x00\x00\x00\x00'
+    b'\x02\x00\x01\x00\x00\x02\x02\x0C'
+    b'\x0A\x00\x3B'
+)
+UPLOADED = SimpleUploadedFile(
+    name='small.gif',
+    content=SMALL_GIF,
+    content_type='image/gif'
+)
 
 
+@override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
 class PostFormTest(TestCase):
     @classmethod
     def setUpClass(cls):
@@ -20,20 +34,20 @@ class PostFormTest(TestCase):
         cls.user = User.objects.create_user(username='user')
         cls.form = PostForm()
         cls.posts_count = Post.objects.count()
+        cls.group = Group.objects.create(
+            title='Test title',
+            slug='test_slug',
+            description='Test description'
+        )
         cls.form_data = {
             'text': 'Test post',
-            'group': ''
+            'group': cls.group
         }
-        cls.group = Group.objects.create(
-            title='Тестовая группа',
-            slug='test_slug',
-            description='Тестовое описание'
-        )
-        cls.post = Post.objects.create(
-            text='Test',
-            group=cls.group,
-            author=cls.user
-        )
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
 
     def setUp(self):
         self.guest_client = Client()
@@ -42,7 +56,6 @@ class PostFormTest(TestCase):
 
     def test_create_post(self):
         """Проверка на создание нового поста"""
-        Post.objects.all().delete()
         self.authorized_client.post(
             reverse('posts:post_create'),
             data=self.form_data,
@@ -66,7 +79,6 @@ class PostFormTest(TestCase):
 
     def test_create_post_is_forbidden_for_guest_client(self):
         """Незарегистрированный пользователь не может создать пост"""
-        Post.objects.all().delete()
         self.guest_client.post(
             reverse('posts:post_create'),
             data=self.form_data,
@@ -76,10 +88,15 @@ class PostFormTest(TestCase):
 
     def test_for_redact_post(self):
         """Тест на редактирование поста"""
+        post = Post.objects.create(
+            text='Test post',
+            group=self.group,
+            author=self.user
+        )
         self.authorized_client.post(
             reverse(
                 'posts:post_edit',
-                kwargs={'post_id': self.post.id}
+                kwargs={'post_id': post.id}
             ),
             data=self.form_data,
             follow=True
@@ -87,81 +104,15 @@ class PostFormTest(TestCase):
         post_id = Post.objects.first().id
         post = Post.objects.get(pk=post_id)
         self.assertEqual(post.text, self.form_data['text'])
-        self.assertEqual(post.group, None)
+        self.assertEqual(post.group, self.group)
         self.assertEqual(post.author, self.user)
 
-    def test_comment_post_is_forbidden_for_guest_client(self):
-        """Не авторизованный пользователь
-         не может комментировать пост"""
-        comment = Comment.objects.count()
-        self.guest_client.post(
-            reverse(
-                'posts:add_comment',
-                kwargs={'post_id': self.post.id}
-            ),
-            data={'text': 'Test comment'},
-            follow=True
-        )
-        self.assertEqual(Comment.objects.count(), comment)
-
-    def test_comment_post_for_authorized_client(self):
-        """Комментарий после успешной отправки
-         появляется на странице поста"""
-        self.authorized_client.post(
-            reverse(
-                'posts:add_comment',
-                kwargs={'post_id': self.post.id}
-            ),
-            data={'text': 'Test comment'},
-            follow=True
-        )
-        self.assertEqual(Comment.objects.count(), ONE_POST)
-
-
-#
-@override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
-class PostCreateFormTests(TestCase):
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.user = User.objects.create_user(username='user')
-        cls.posts_count = Post.objects.count()
-        cls.group = Group.objects.create(
-            title='Тестовая группа',
-            slug='test_slug',
-            description='Тестовое описание',
-        )
-        cls.form = PostForm()
-        cls.small_gif = (
-            b'\x47\x49\x46\x38\x39\x61\x02\x00'
-            b'\x01\x00\x80\x00\x00\x00\x00\x00'
-            b'\xFF\xFF\xFF\x21\xF9\x04\x00\x00'
-            b'\x00\x00\x00\x2C\x00\x00\x00\x00'
-            b'\x02\x00\x01\x00\x00\x02\x02\x0C'
-            b'\x0A\x00\x3B'
-        )
-
-    @classmethod
-    def tearDownClass(cls):
-        super().tearDownClass()
-        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
-
-    def setUp(self):
-        self.authorized_client = Client()
-        self.authorized_client.force_login(self.user)
-
     def test_create_post(self):
-        """Валидная форма создает запись в Post."""
-        Post.objects.all().delete()
-        uploaded = SimpleUploadedFile(
-            name='small.gif',
-            content=self.small_gif,
-            content_type='image/gif'
-        )
+        """Валидная форма создает запись с картинкой в Post."""
         form_data = {
             'text': 'Тестовый пост',
             'group': self.group.id,
-            'image': uploaded
+            'image': UPLOADED
         }
         response = self.authorized_client.post(
             reverse('posts:post_create'),
@@ -188,16 +139,11 @@ class PostCreateFormTests(TestCase):
 
     def test_image_post(self):
         """При выводе поста с картинкой изображение есть в словаре"""
-        uploaded = SimpleUploadedFile(
-            name='small.gif',
-            content=self.small_gif,
-            content_type='image/gif'
-        )
         post = Post.objects.create(
             author=self.user,
             text='Test post',
             group=self.group,
-            image=uploaded
+            image=UPLOADED
         )
         list_pages_names = (
             reverse('posts:index'),
