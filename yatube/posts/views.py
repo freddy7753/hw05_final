@@ -7,8 +7,6 @@ from .forms import PostForm, CommentForm
 from .models import Post, Group, Comment, Follow, User
 from .utils import get_paginator_obj
 
-TITLE_COUNT_SYMBOL: int = 30
-
 
 @cache_page(20, key_prefix='index_page')
 def index(request):
@@ -21,48 +19,41 @@ def group_posts(request, slug):
     group = get_object_or_404(Group, slug=slug)
     post_list = group.posts.select_related('group', 'author')
     page_obj = get_paginator_obj(post_list, request)
-    context = {
-        'group': group,
-        'page_obj': page_obj,
-    }
-    return render(request, 'posts/group_list.html', context)
+    return render(
+        request,
+        'posts/group_list.html',
+        {'group': group, 'page_obj': page_obj}
+    )
 
 
 def profile(request, username):
     author = get_object_or_404(User, username=username)
-    user_posts = author.posts.select_related(
-        'author',
-        'group'
-    )
+    user_posts = author.posts.select_related('author', 'group')
     page_obj = get_paginator_obj(user_posts, request)
-    following = (
-        request.user.is_authenticated
-        and request.user.follower.filter(
-            author=author
-        ).exists()
+    following = False
+    if request.user != author:
+        following = (
+            request.user.is_authenticated
+            and request.user.follower.filter(
+                author=author
+            ).exists()
+        )
+    return render(
+        request,
+        'posts/profile.html',
+        {'following': following, 'page_obj': page_obj, 'author': author}
     )
-    context = {
-        'following': following,
-        'page_obj': page_obj,
-        'author': author,
-    }
-    return render(request, 'posts/profile.html', context)
 
 
 def post_detail(request, pk):
     post = get_object_or_404(Post, pk=pk)
-    author_post = Post.objects.select_related('author')
-    title = post.text[:TITLE_COUNT_SYMBOL]
     comments = Comment.objects.filter(post=post)
     form = CommentForm(request.POST or None)
-    context = {
-        'title': title,
-        'post': post,
-        'author_post': author_post,
-        'form': form,
-        'comments': comments
-    }
-    return render(request, 'posts/post_detail.html', context)
+    return render(
+        request,
+        'posts/post_detail.html',
+        {'post': post, 'form': form, 'comments': comments}
+    )
 
 
 @login_required
@@ -77,9 +68,7 @@ def post_create(request):
         new_post.author = request.user
         new_post.save()
         return redirect(reverse('posts:profile', args=[user]))
-    return render(
-        request,
-        'posts/create_post.html', {'form': form})
+    return render(request, 'posts/create_post.html', {'form': form})
 
 
 def post_edit(request, post_id):
@@ -95,12 +84,11 @@ def post_edit(request, post_id):
     if form.is_valid():
         form.save()
         return redirect(reverse('posts:post_detail', args=[post_id]))
-    context = {
-        'is_edit': is_edit,
-        'post': post,
-        'form': form
-    }
-    return render(request, 'posts/create_post.html', context)
+    return render(
+        request,
+        'posts/create_post.html',
+        {'is_edit': is_edit, 'post': post, 'form': form}
+    )
 
 
 @login_required
@@ -119,10 +107,7 @@ def add_comment(request, post_id):
 def follow_index(request):
     posts = Post.objects.filter(author__following__user=request.user)
     page_obj = get_paginator_obj(posts, request)
-    context = {
-        'page_obj': page_obj
-    }
-    return render(request, 'posts/follow.html', context)
+    return render(request, 'posts/follow.html', {'page_obj': page_obj})
 
 
 @login_required
@@ -139,7 +124,7 @@ def profile_follow(request, username):
 @login_required
 def profile_unfollow(request, username):
     author = User.objects.get(username=username)
-    is_follower = Follow.objects.filter(user=request.user, author=author)
+    is_follower = request.user.follower.filter(author=author)
     if is_follower:
         is_follower.delete()
     return redirect('posts:profile', username)

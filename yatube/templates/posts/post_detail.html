@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}
-Пост {{ title }}
+Пост {{ post.text|truncatechars:15 }}
 {% endblock %}
 {% load thumbnail %}
 {% load user_filters %}
@@ -23,7 +23,7 @@
         Автор: {{ post.author.get_full_name }}
       </li>
       <li class="list-group-item d-flex justify-content-between align-items-center">
-        Всего постов автора:  <span >{{ author_post.count }}</span>
+        Всего постов автора:  <span >{{ post.author.posts.count }}</span>
       </li>
       <li class="list-group-item">
         <a href="{% url 'posts:profile' post.author %}">

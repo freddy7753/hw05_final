@@ -39,11 +39,15 @@ class PostPagesTests(TestCase):
             'posts:profile', kwargs={'username': 'HasNoName'}
         )
         cls.detail = reverse(
-            'posts:post_detail', kwargs={'pk': NUMBER_OF_POSTS}
+            'posts:post_detail', kwargs={'pk': cls.post.id}
         )
         cls.create = reverse('posts:post_create')
         cls.edit = reverse(
-            'posts:post_edit', kwargs={'post_id': NUMBER_OF_POSTS}
+            'posts:post_edit', kwargs={'post_id': cls.post.id}
+        )
+        cls.add_comment = reverse(
+            'posts:add_comment',
+            kwargs={'post_id': cls.post.id}
         )
 
         cls.templates_pages_name = {
@@ -111,7 +115,7 @@ class PostPagesTests(TestCase):
                 )
                 self.assertEqual(
                     response.context['post'].id,
-                    NUMBER_OF_POSTS
+                    self.post.id
                 )
 
     def test_index_page_show_correct_context(self):
@@ -136,10 +140,7 @@ class PostPagesTests(TestCase):
     def test_post_edit_show_correct_context(self):
         """Шаблон post_edit сформирован с правильным контекстом"""
         form_data = {'text': 'redact text', 'group': self.group.id}
-        self.authorized_client.post(reverse(
-            'posts:post_edit',
-            kwargs={'post_id': self.post.id}),
-            data=form_data, follow=True)
+        self.authorized_client.post(self.edit, data=form_data, follow=True)
         edit_post = Post.objects.get(id=self.post.id)
         self.assertEqual(edit_post.text, form_data['text'])
 
@@ -156,25 +157,18 @@ class PostPagesTests(TestCase):
     def test_comment_post_is_forbidden_for_guest_client(self):
         """Не авторизованный пользователь
          не может комментировать пост"""
-        comment = Comment.objects.count()
         self.guest_client.post(
-            reverse(
-                'posts:add_comment',
-                kwargs={'post_id': self.post.id}
-            ),
+            self.add_comment,
             data={'text': 'Test comment'},
             follow=True
         )
-        self.assertEqual(Comment.objects.count(), comment)
+        self.assertEqual(Comment.objects.count(), ZERO)
 
     def test_comment_post_for_authorized_client(self):
         """Комментарий после успешной отправки
          появляется на странице поста"""
         self.authorized_client.post(
-            reverse(
-                'posts:add_comment',
-                kwargs={'post_id': self.post.id}
-            ),
+            self.add_comment,
             data={'text': 'Test comment'},
             follow=True
         )
@@ -238,6 +232,10 @@ class ViewFollowTests(TestCase):
         cls.user = User.objects.create_user(username='user2')
         cls.following_user = User.objects.create_user(username='user3')
         cls.follow_count = Follow.objects.count()
+        cls.profile_follow = reverse(
+            'posts:profile_follow',
+            kwargs={'username': cls.following_user}
+        )
 
     def setUp(self):
         self.guest_client = Client()
@@ -252,10 +250,7 @@ class ViewFollowTests(TestCase):
     def test_authorized_client_can_subscribe(self):
         """Авторизованный пользователь может подписаться"""
         response = self.follower_client.get(
-            reverse(
-                'posts:profile_follow',
-                kwargs={'username': self.following_user}
-            )
+            self.profile_follow
         )
         self.assertRedirects(
             response, reverse(
@@ -291,6 +286,7 @@ class ViewFollowTests(TestCase):
     def test_following_post_in_follower_index_context(self):
         """Новая запись пользователя появляется в ленте подписчика и
         не появляется в ленте других"""
+        follow_index = reverse('posts:follow_index')
         post = Post.objects.create(
             text='Test post',
             author=self.following_user
@@ -299,16 +295,8 @@ class ViewFollowTests(TestCase):
             user=self.follower_user,
             author=self.following_user
         )
-        response_follower = self.follower_client.get(
-            reverse(
-                'posts:follow_index'
-            )
-        )
-        response_authorized_client = self.authorized_client.get(
-            reverse(
-                'posts:follow_index'
-            )
-        )
+        response_follower = self.follower_client.get(follow_index)
+        response_authorized_client = self.authorized_client.get(follow_index)
         self.assertEqual(response_follower.context['post'].text, post.text)
         self.assertEqual(
             response_follower.context['post'].author,
@@ -320,10 +308,7 @@ class ViewFollowTests(TestCase):
     def test_guest_client_cant_subscribe(self):
         """Неавторизованный клиент не может подписаться"""
         response = self.guest_client.get(
-            reverse(
-                'posts:profile_follow',
-                kwargs={'username': self.following_client}
-            )
+            self.profile_follow
         )
         self.assertEqual(response.status_code, HTTPStatus.FOUND)
         self.assertEqual(Follow.objects.count(), ZERO)
