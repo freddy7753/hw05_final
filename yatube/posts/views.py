@@ -30,14 +30,13 @@ def profile(request, username):
     author = get_object_or_404(User, username=username)
     user_posts = author.posts.select_related('author', 'group')
     page_obj = get_paginator_obj(user_posts, request)
-    following = False
-    if request.user != author:
-        following = (
-            request.user.is_authenticated
-            and request.user.follower.filter(
-                author=author
-            ).exists()
-        )
+    following = (
+        request.user.is_authenticated
+        and request.user != author
+        and request.user.follower.filter(
+            author=author
+        ).exists()
+    )
     return render(
         request,
         'posts/profile.html',
@@ -75,7 +74,7 @@ def post_edit(request, post_id):
     post = get_object_or_404(Post, id=post_id)
     if request.user != post.author:
         return redirect(reverse('posts:post_detail', args=[post_id]))
-    is_edit = True
+
     form = PostForm(
         request.POST or None,
         files=request.FILES or None,
@@ -87,7 +86,7 @@ def post_edit(request, post_id):
     return render(
         request,
         'posts/create_post.html',
-        {'is_edit': is_edit, 'post': post, 'form': form}
+        {'is_edit': True, 'post': post, 'form': form}
     )
 
 
@@ -123,8 +122,8 @@ def profile_follow(request, username):
 
 @login_required
 def profile_unfollow(request, username):
-    author = User.objects.get(username=username)
-    is_follower = request.user.follower.filter(author=author)
+    # author = User.objects.get(username=username)
+    is_follower = Follow.objects.filter(author__following__user=request.user)
     if is_follower:
         is_follower.delete()
     return redirect('posts:profile', username)
