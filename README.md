@@ -1,3 +1,45 @@
-# hw05_final
+# Yatube
 
-[![CI](https://github.com/yandex-praktikum/hw05_final/actions/workflows/python-app.yml/badge.svg?branch=master)](https://github.com/yandex-praktikum/hw05_final/actions/workflows/python-app.yml)
+## Yatube - это веб-приложение, созданное на Django Framework, которое позволяет пользователям создавать, редактировать и публиковать посты с картинками, а также подписываться на других пользователей и просматривать их посты.
+
+
+# Установка
+1. Склонируйте репозиторий:
+
+``` git clone https://github.com/freddy7753/hw_final05.git ```
+
+2. Создайте и активируйте виртуальное окружение:
+
+``` python -m venv env ```
+
+``` source env/bin/activate ```
+
+3. Установите необходимые зависимости:
+
+``` pip install -r requirements.txt ```
+
+4. Создайте базу данных и примените миграции:
+
+``` python manage.py migrate ```
+
+5. Запустите сервер:
+
+``` python manage.py runserver ```
+
+# Функционал
+
+- Регистрация/авторизация пользователей 
+- Создание, редактирование и удаление постов с картинками
+- Возможность просмотра постов других пользователей
+- Подписка на других пользователей и просмотр их постов
+- Комментирование постов
+
+# Используемые технологии
+- Django Framework
+- Django ORM
+- SQLite3
+- Bootstrap
+- Pillow
+
+# Автор
+Наурзгалиев Фарид
