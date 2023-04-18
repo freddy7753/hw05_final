@@ -122,11 +122,5 @@ def profile_follow(request, username):
 
 @login_required
 def profile_unfollow(request, username):
-    author = User.objects.get(username=username)
-    is_follower = request.user.follower.filter(author=author)
-    # пробовал разные варианты запроса на подобии,
-    # но пайтест не пропускает
-    # Follow.objects.filter(author__follower__user=request.user)
-    if is_follower:
-        is_follower.delete()
+    Follow.objects.filter(user=request.user, author__username=username).delete()
     return redirect('posts:profile', username)

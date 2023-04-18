@@ -29,6 +29,8 @@ ALLOWED_HOSTS = [
     '127.0.0.1',
     '[::1]',
     'testserver',
+    'www.freddy77.pythonanywhere.com',
+    'freddy77.pythonanywhere.com',
 ]
 
 # Application definition
